@@ -1,0 +1,965 @@
+---
+title: 'PSA001 Secondary Analysis: The Facial Width-to-Height Ratio (fWHR) and Perceived Dominance and Trustworthiness: Moderating Role of Social Identity Cues (Gender and Race) and Ecological Factor (Pathogen Prevalence)'
+
+output:
+  html_document:
+    code_folding: hide
+    number_sections: true
+    toc: yes
+    toc_depth: 5
+---
+<div style="margin-bottom:100px;">
+
+## Details of the proposing team
+
+```{r setup, echo=F}
+
+# The R code chunks in this Rmd file contain or source all of the code to reproduce our results in full. Some code chunks depend on previous code chunks to work. All source R files should be stored in the same directory with this Rmd file. 
+
+# If you wish to "knit" a pdf from this Rmd, follow the installation instructions at https://github.com/crsh/papaja, then install all of the R packages noted in the 'libraries' code chunk below. 
+
+# Set default chunk options (can be overridden in later chunks)
+knitr::opts_chunk$set(echo = FALSE, 
+                      eval = TRUE,
+                      message = FALSE, 
+                      fig.width = 7, 
+                      fig.height = 7,
+                      results = "hide",
+                      error = FALSE,
+                      warning = FALSE,
+                      include = TRUE,
+                      tinytex.verbose = TRUE)
+
+```
+
+
+
+```{r packages, libraries, echo = FALSE, include=FALSE}
+
+# rm(list=ls())
+
+####################################
+###### Install R PACKAGES ############
+####################################
+
+####################################
+######  FIRST TIME ONLY ############
+####################################
+
+# If you are running this code chunk first time, please make sure following packages are intalled in your R
+
+## THE R PACKAGES NEEDED FOR THE CURRENT ANALYSIS NEEDS TO BE INSTALLED FROM TWO SOURCES: CRAN & GITHUB
+
+####################################
+######  PACKAGES FROM CRAN ############
+####################################
+list.of.packages <- c("apaTables","bookdown","broom","car","devtools","dplyr","lsr","esc",
+"expss","foreign","ggplot2","ggpubr","ggstatsplot","gridExtra","haven","Hmisc","janitor",
+"kableExtra","knitr","lmtest","lme4","lsr","magick","MBESS","papaja","plyr","png","psych",
+"readr","reshape2","rmarkdown","Rmisc","shiny","sjlabelled","tidyr","tidyverse","WRS2", "TOSTER", 
+"BayesFactor", "labelled", "abtest", "corrr","jtools", "interactions", "summarytools",
+"stargazer", "rio", "tidyverse", "sjPlot", "ggstance", "emmeans", "plyr","effsize", "pbkrtest",
+"RColorBrewer", "RColorBrewer", "ggeffects","gridExtra", "xtable")
+
+
+
+
+
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages, dependencies = TRUE)
+
+invisible(lapply(list.of.packages, library, character.only = TRUE))
+
+# note: above code will also load the packages 
+
+
+####################################
+######  PACKAGES FROM GITHUB ############
+####################################
+
+   # Install devtools package if necessary so that you can install these  packages from github
+   # if(!"devtools" %in% rownames(installed.packages())) install.packages("devtools")
+
+   # packages  (remove # from the lines below to install the packages)
+   # utils::install.packages(pkgs = "ggstatsplot")
+
+
+########################################
+### INSTALLING TinyTex (FOR RENDERING PDF OUTPUT)
+#######################################
+
+## please refer to URL: https://yihui.name/tinytex/r/
+# It might take a while to install the package (with a slow internet speed it took me 45 mins)
+# Remove # from below lines and run them. 
+# if(!"tinytex" %in% rownames(installed.packages())) install.packages("tinytex")
+# tinytex::install_tinytex()
+# Please quit and reopen your R session  and check if tinytex:::is_tinytex() is TRUE (to make sure package is installed).
+
+
+set.seed(8675309)
+```
+  
+
+## Notes on the Analysis
+
+
+
+Based on the valence-dominance model (Oosterhof and Todorov, 2008) we classify ratings on various traits (included in the PSA001 data collection) into two broad dimensions: 1) Trustworthiness 2) Dominance
+
+Consistent with results of the original Principal component analysis (PCA) by Oosterhof and Todorov (2008) we choose the rated traits into Trustworthiness dimension and Dominance dimension. Bellow listed traits are combined to from from the dimensions:
+
+Trust Dimension: "trustworthy",	"emostable",	"intelligent",	"responsible",	"sociable", "caring", "attractive" <br/>
+Dominance Dimension: "aggressive",	"dominant",	"mean"
+
+
+
+```{r load-data}
+
+## Load "psa001_ind_subset.csv" 
+data <- rio::import("../data/psa001_ind.csv")
+
+
+### Pivot the data into wide form to make it convinient for analysis
+pivot.df <- data %>%
+  tidyr::pivot_wider( id_cols=c("user_id","age","sex", "ethnicity", "language", "lab",
+                          "country","stim_id"),names_from = trait, values_from = rating)
+
+# Rename demographic variables such that they get identifed with participants
+names(pivot.df)[names(pivot.df) == "age"] <- "Page"
+names(pivot.df)[names(pivot.df) == "sex"] <- "Psex"
+names(pivot.df)[names(pivot.df) == "ethnicity"] <- "Pethnicity"
+names(pivot.df)[names(pivot.df) == "language"] <- "Planguage"
+
+
+
+# CFD data was downloaded from Chicago Faces Database (https://chicagofaces.org/)
+# The .csf file donwloaded from CFD website carried the name "Data.csv" We have changed it to "CFDData.csv" so we dont get confused
+
+## CFD data
+## The code below locates the CFD data in my local machine, please make sure you load the data from the folder where you hapen to have it
+cfd <- rio::import("../data/CFDData.csv")
+
+cfdbrief<-cfd %>% dplyr::select(Target, Race, Gender, Age, fWHR) #Just subset the variables such that we only keep the variables that are of interest to our analysis
+
+## Mege the Exploratory PSA data and CFD data 
+Merge= merge(x = pivot.df, y = cfdbrief, by.x = "stim_id",by.y = "Target", all.x = TRUE)
+
+
+
+
+################
+## TWO BROAD DIMENSIONS: Trustworthyness and Dominance
+################
+
+## Based on the valence-dominance model (Oosterhof and Todorov, 2008) we classify ratings on various traits included in the the PSA001 data into two broad dimensions: 1) Trustworthiness 2) Dominance
+
+# Based on the original Principal component analysis (PCA) by Oosterhof and Todorov (2008) we choose the rated traits into Trustworthiness dimension and Dominance dimension. Blelow listed traits are combined to from from the dimensions: 
+
+# Traits "confident, "weird", and "unhappy" were not considered part of the Domiance or turstworthiness dimensions. PCA results suggeted "confident, "weird" loaded on both the dimensions, therefore ignored.Although "Unhappy" mapped with trustworthiness dimension, reverse coding the rating item to align with dimension may drastically change meaning of the item and what it was rated by the participants. 
+
+
+
+##  FW sub-scales
+Merge$trust.dim<- rowSums(Merge[,c("trustworthy",	"emostable",	"intelligent",	"responsible",	"sociable", "caring", "attractive")],na.rm=TRUE) 
+
+Merge$trust.dim[Merge$trust.dim==0]<-NA ## needs this because when if all 3 columns of dominance have value NA, "rowSums" code adds them as "0"
+
+
+Merge$Dom.dim<- rowSums(Merge[,c("aggressive",	"dominant",	"mean")],na.rm=TRUE)
+Merge$Dom.dim[Merge$Dom.dim==0]<-NA  ## needs this because when if all 3 columns of dominance have value NA, "rowSums" code adds them as "0"
+
+Merge= Merge[!with(Merge,is.na(trust.dim)& is.na(Dom.dim)),] #Also remove rows with 'NA' in both DVs
+
+
+
+## turn some of the variables to factor variables
+Merge$Gender=as.factor(Merge$Gender)
+Merge$Race=as.factor(Merge$Race)
+
+# Make  White race as a reference category in race
+Merge <- within(Merge, Race <- relevel(Race, ref = "W"))
+
+
+# Help functions
+# isSingular(D1, tol = 1e-05) for checking the singularity
+
+
+
+```  
+  
+<div style="margin-bottom:100px;">
+
+
+
+
+
+## Dataset summary and descriptive statistics
+
+```{r descript_1, include=F, echo=FALSE, message=FALSE}
+
+
+dmvar <- subset(Merge, select = c("user_id", "Page","Psex","Pethnicity", "Planguage",
+                                        "lab","country"))
+dmvar2 <- dmvar[!duplicated(dmvar$user_id), ]
+
+str(Merge)
+
+
+
+## Gender count
+gend= count(dmvar2, c("Psex"))
+kable(gend, digits = 2)%>% kable_styling(bootstrap_options = "striped", full_width = F)
+
+#AGE
+age <- psych::describe(dmvar2$Page)
+kable(age, digits = 2)%>% kable_styling(bootstrap_options = "striped", full_width = F)
+
+NCountry= length(unique(dmvar2$country)) #no of countries where the participants come from
+
+
+# Mean and SD for DVs
+
+Mdom <- psych::describe(Merge$Dom.dim)
+Mtrust <- psych::describe(Merge$trust.dim)
+
+```
+
+
+## Plot of Dominance and trustworthiness distribution
+
+
+```{r fun1, include=F, echo=FALSE, message=FALSE}
+estimate_mode <- function(x) {
+  d <- density(x)
+  d$x[which.max(d$y)]
+}
+```
+
+
+Plot trait Dominance dimension with mode & 80th percentile
+```{r deplot1, fig.height = 3, fig.width = 4.9}
+
+#ggplot cant handle na's so we get a clean dataframe ready for plot
+dom.df= Merge[!is.na(Merge$Dom.dim),] 
+  
+
+dp1= ggplot(dom.df, aes(x=Dom.dim), na.rm = TRUE) +
+  geom_histogram(aes(y=..density..), position="identity", alpha=0.8, binwidth = 1, color="black", fill="grey80") +
+  geom_density(alpha=0.2, adjust = 6, size = 1) +
+  geom_vline(data=dom.df, aes(xintercept=estimate_mode(Dom.dim), na.rm = TRUE), linetype="solid", size=1.2) +
+  geom_vline(data=dom.df, aes(xintercept=quantile(Dom.dim, probs = 0.80), na.rm = TRUE), linetype="dashed", size=1.2) +
+  labs(x="Dominance dimension", y = "Density") +
+  theme_classic()
+
+dp1
+
+```
+
+<div style="margin-bottom:100px;">
+
+
+
+
+Plot trait Trustworthiness dimension with mode & 80th percentile
+```{r deplot2, fig.height = 3, fig.width = 4.9}
+
+#ggplot cant handle na's so we get a clean df ready for plot
+trust.df= Merge[!is.na(Merge$trust.dim),] 
+  
+
+dp2= ggplot(trust.df, aes(x=trust.dim), na.rm = TRUE) +
+  geom_histogram(aes(y=..density..), position="identity", alpha=0.8, binwidth = 1, color="black", fill="grey80") +
+  geom_density(alpha=0.2, adjust = 6, size = 1) +
+  geom_vline(data=trust.df, aes(xintercept=estimate_mode(trust.dim), na.rm = TRUE), linetype="solid", size=1.2) +
+  geom_vline(data=trust.df, aes(xintercept=quantile(trust.dim, probs = 0.80), na.rm = TRUE), linetype="dashed", size=1.2) +
+  labs(x="Trustworthiness dimension", y = "Density") +
+  theme_classic()
+
+dp2
+```
+
+<div style="margin-bottom:100px;">
+
+
+
+
+## Mixed effect model
+```{r lmeparameters}
+#control parameters to use in all models
+control_params = lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=100000))
+```
+
+
+## Direct effects  
+
+### DV: Perceived Dominance 
+
+```{r blockRQ1_1, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+### Dominance dimension
+RQ1H1.1 = lme4::lmer(Dom.dim ~ Gender+ Race+ Age  + (1 |country), data = dom.df, control= control_params,REML = FALSE)
+RQ1H1.2 = lme4::lmer(Dom.dim ~ Gender+ Race+ Age + fWHR + (1|country), data = dom.df, control= control_params, REML = FALSE)
+
+
+
+# print the above two model results
+tab_model(RQ1H1.1,RQ1H1.2)
+
+
+
+
+```
+
+<div style="margin-bottom:100px;">
+
+#### ANOVA comparing models
+```{r blockRQ1_1part2, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+#look at significance of face ratio
+anova_mod<-anova(RQ1H1.1, RQ1H1.2)
+options(knitr.kable.NA = '')  #replace NA with blanks
+rownames(anova_mod) <- c()
+kable(anova_mod, digits = 2)%>% kable_styling(bootstrap_options = "striped", full_width = F)
+
+```
+
+
+<div style="margin-bottom:100px;">
+
+### DV: Perceived Trustworthiness  
+```{r blockRQ1_2, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+### Dominance dimension
+RQ1H2.1 = lme4::lmer(trust.dim ~ Gender+ Race+ Age  + (1|country), data = trust.df, control= control_params,REML = FALSE)
+RQ1H2.2 = lme4::lmer(trust.dim ~ Gender+ Race+ Age + fWHR + (1 |country), data = trust.df, control= control_params,REML = FALSE)
+
+
+# print the above two model results
+tab_model(RQ1H2.1,RQ1H2.2)
+
+
+
+```
+
+
+<div style="margin-bottom:100px;">
+
+#### ANOVA comparing models
+```{r blockRQ1_2part2, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+#look at significance of face ratio
+anova_mod =anova(RQ1H2.1,RQ1H2.2)
+options(knitr.kable.NA = '')  #replace NA with blanks
+rownames(anova_mod) <- c()
+kable(anova_mod, digits = 2)%>% kable_styling(bootstrap_options = "striped", full_width = F)
+
+```
+
+  
+<div style="margin-bottom:100px;">
+
+## Full blown models
+
+```{r fullmodel, include=T, echo=FALSE}
+
+############################################################################################
+# In this chunk we run the full blown model with all the interactions
+###########################################################################################
+
+full_dom = lme4::lmer(Dom.dim ~  fWHR*Age + fWHR*Race +fWHR*Gender + (1|country), data = dom.df, 
+                      control= control_params,REML = FALSE)
+
+full_trust = lme4::lmer(trust.dim ~ fWHR*Age + fWHR*Race +fWHR*Gender + (1|country), data = trust.df, 
+                      control= control_params,REML = FALSE)
+
+
+
+```
+
+### Full blown model: DV: Perceived Dominance
+```{r fullmod_dom1, include=T, echo=FALSE, message=FALSE, results = "asis"}
+# Regression results
+tab_model(full_dom)
+```
+
+<div style="margin-bottom:100px;">
+<div style="margin-bottom:100px;">
+
+##### Plot of the regression coefficients
+```{r fullmod_dom2, include=T, echo=FALSE, message=FALSE, fig.width=8, fig.height=5, results = "asis"}
+#PLOT Coefficients
+plot_ful_dom =plot_coefs(full_dom, scale = TRUE, colors = "Black",
+                coefs = c("Facial Width-to-Height Ratio(fWHR)"="fWHR",
+                          "Age"="Age",
+                          "Race -Black" = "RaceB",
+                          "Race -White" = "RaceW",
+                          "Race -Latino" = "RaceL",
+                          "Race -Asian" = "RaceA",
+                          "Gender" = "GenderM",
+                          "fWHR x Age" = "fWHR:Age",
+                          "fWHR x Asian Race" = "fWHR:RaceA",
+                          "fWHR x Black Race" = "fWHR:RaceB",
+                          "fWHR x Hispanic Race" = "fWHR:RaceL",
+                          "fWHR x Gender"="fWHR:GenderM"))
+
+
+
+
+plot_ful_dom + theme(panel.background = element_rect(colour = "black", size=.8))
+
+```
+
+### Full blown model: DV: Perceived Trustworthiness
+```{r fullmod_trust1, include=T, echo=FALSE, message=FALSE, results = "asis"}
+#PLOT Coefficients
+tab_model(full_trust)
+
+```
+
+<div style="margin-bottom:100px;">
+<div style="margin-bottom:100px;">
+
+##### Plot of the regression coefficients
+```{r fullmod_trust2, include=T, echo=FALSE, message=FALSE, fig.width=8, fig.height=5, results = "asis"}
+
+#PLOT Coefficients
+plot_ful_trust =plot_coefs(full_trust, scale = TRUE, colors = "Black",
+                coefs = c("Facial Width-to-Height Ratio(fWHR)"="fWHR",
+                          "Age"="Age",
+                          "Race -Black" = "RaceB",
+                          "Race -White" = "RaceW",
+                          "Race -Latino" = "RaceL",
+                          "Race -Asian" = "RaceA",
+                          "Gender" = "GenderM",
+                          "fWHR x Age" = "fWHR:Age",
+                          "fWHR x Asian Race" = "fWHR:RaceA",
+                          "fWHR x Black Race" = "fWHR:RaceB",
+                          "fWHR x Hispanic Race" = "fWHR:RaceL",
+                          "fWHR x Gender"="fWHR:GenderM"))
+
+
+
+
+plot_ful_trust + theme(panel.background = element_rect(colour = "black", size=.8))
+
+```
+
+
+
+
+
+
+
+
+## Gender  
+
+### DV: Perceived Dominance  
+
+#### Mixed effects regression results 
+
+```{r block1_1, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+
+##############################
+######## This model is same as full blown model but without fWHR x Gender interaction term
+#############################
+### Dominance dimension
+DG1 = lme4::lmer(Dom.dim ~   fWHR*Race+ fWHR*Age +Gender + (1|country), data = dom.df, control= control_params,REML = FALSE)
+# summary(DG1)
+
+# library(huxtable) # the package is useful to output results for word
+# export_summs(DG1,full_dom, scale = TRUE, error_format = "[{conf.low}, {conf.high}]")
+
+# print the above two model results
+tab_model(DG1,full_dom)
+
+
+``` 
+
+<div style="margin-bottom:100px;">
+<br/>
+<br/>
+<div style="margin-bottom:100px;">
+#### ANOVA comparing models
+```{r block1_1V2, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+#look at significance of interaction
+anova_mod =anova(DG1,full_dom)
+options(knitr.kable.NA = '')  #replace NA with blanks
+rownames(anova_mod) <- c()
+kable(anova_mod, digits = 2)%>% kable_styling(bootstrap_options = "striped", full_width = F)
+
+
+```
+
+
+<div style="margin-bottom:100px;">
+
+#### Interaction plot
+
+```{r block1_3, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+
+## interaction plot
+interact_plot(model = full_dom, pred = fWHR, modx = Gender, modx.labels = c("Female", "Male"),
+              x.label ="Facial Width-to-Height Ratio (fWHR)" , y.label = "Dominance dimension" )+theme_apa() 
+
+
+```
+
+<div style="margin-bottom:100px;">
+
+#### constrast
+
+```{r block1_4, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+ss1= emmeans(full_dom, pairwise ~ Gender, var= "fWHR")
+
+kable(ss1$contrasts, digits = 2, caption = "contrast")%>% kable_styling(bootstrap_options = "striped", full_width = F)
+
+
+
+```
+
+<div style="margin-bottom:100px;">
+
+### DV: Perceived Trustworthiness  
+
+#### Mixed effects regression results
+```{r block2_1, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+### Trustworthy direction
+TG1 = lmer(trust.dim ~ fWHR*Race+ fWHR*Age +Gender +  (1|country), data = trust.df,control= control_params, REML = FALSE)
+# summary(TG1)
+
+
+
+```
+
+<div style="margin-bottom:100px;">
+<br/>
+<br/>
+<div style="margin-bottom:100px;">
+#### ANOVA comparing models
+```{r block2_1v2, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+#look at significance of interaction
+anova_mod =anova(TG1, full_trust)
+options(knitr.kable.NA = '')  #replace NA with blanks
+rownames(anova_mod) <- c()
+kable(anova_mod, digits = 2)%>% kable_styling(bootstrap_options = "striped", full_width = F)
+
+
+```
+
+<div style="margin-bottom:100px;">
+<div style="margin-bottom:100px;">
+
+#### Interaction plot
+```{r block2_3, include=T, echo=FALSE, message=FALSE, results = "asis" }
+interact_plot(model = full_trust, pred = fWHR, modx = Gender, modx.labels = c("Female", "Male"),
+              x.label ="Facial Width-to-Height Ratio (fWHR)" , y.label = "Trustworthiness" )+theme_apa() 
+
+
+```
+
+<div style="margin-bottom:100px;">
+<br/>
+<br/>
+<div style="margin-bottom:100px;">
+
+
+#### Simple slopes test
+```{r block2_4, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+ss2= emmeans(full_trust, pairwise ~ Gender, var= "fWHR")
+kable(ss2$contrasts, digits = 2, caption = "contrast")%>% kable_styling(bootstrap_options = "striped", full_width = F)
+
+
+```
+
+<div style="margin-bottom:100px;">
+
+## Race
+
+### DV: Perceived Dominance 
+
+#### Mixed effects regression results
+
+```{r block3_1, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+##############################
+######## interaction: fWHR X Race
+#############################
+
+### Dominance dimension
+DR2 = lmer(Dom.dim ~  fWHR*Race + Gender + Age  + (1|country), data = dom.df,control= control_params, REML = FALSE)
+
+
+# print the above two model results 
+tab_model(DR2,full_dom)
+
+
+```
+
+
+<div style="margin-bottom:100px;">
+<br/>
+<br/>
+<div style="margin-bottom:100px;">
+#### ANOVA comparing models
+```{r block3_1v2, include=T, echo=FALSE, message=FALSE, results = "asis" }
+#look at significance of interaction
+anova_mod =anova(DR2,full_dom)
+options(knitr.kable.NA = '')  #replace NA with blanks
+rownames(anova_mod) <- c()
+kable(anova_mod, digits = 2)%>% kable_styling(bootstrap_options = "striped", full_width = F)
+
+```
+
+
+
+<div style="margin-bottom:100px;">
+<br/>
+<br/>
+<div style="margin-bottom:100px;">
+#### Interaction plot
+```{r block3_3, include=T, echo=FALSE, message=FALSE, results = "asis" }
+interact_plot(model = DR2, pred = fWHR, modx = Race,
+              x.label ="Facial Width-to-Height Ratio (fWHR)" , y.label = "Dominance dimension" )+theme_apa() 
+
+```
+
+<div style="margin-bottom:100px;">
+<br/>
+<br/>
+<div style="margin-bottom:100px;">
+
+#### Pairwise slopes Comparisons
+
+```{r block3_5, include=T, echo=FALSE, message=FALSE, results = "asis"}
+
+library(emmeans)
+# Obtain slopes for each machine ...
+slopecomp1 <- emmeans(full_dom, "Race", var = "fWHR") 
+# ... and pairwise comparisons thereof
+slopecomp1tab=pairs(slopecomp1)
+slopecomp1tab=as.data.frame(slopecomp1tab)
+
+kable(slopecomp1tab, digits = 2)%>% kable_styling(bootstrap_options = "striped", full_width = F)
+
+
+
+```
+
+<br/>
+<br/>
+
+### DV: Perceived Trustworthiness 
+
+#### Mixed effects regression results
+
+```{r block4_1, include=T, echo=FALSE, results = "asis" }
+
+##############################
+######## interaction: fWHR X Race
+#############################
+
+### Dominance dimension
+TR2 = lmer(trust.dim ~ fWHR*Race + Gender + Age  + (1|country), data = trust.df, control= control_params,REML = FALSE)
+
+
+
+
+# print the above two model results 
+sjPlot::tab_model(TR2, full_trust)
+
+
+
+```
+
+<div style="margin-bottom:100px;">
+<br/>
+<br/>
+<div style="margin-bottom:100px;">
+#### ANOVA comparing models
+```{r block4_1v2, include=T, echo=FALSE, results = "asis" }
+#look at significance of interaction
+anova_mod =anova(TR2, full_trust)
+options(knitr.kable.NA = '')  #replace NA with blanks
+rownames(anova_mod) <- c()
+kable(anova_mod, digits = 2)%>% kable_styling(bootstrap_options = "striped", full_width = F)
+
+
+```
+
+
+<div style="margin-bottom:100px;">
+#### Interaction plot
+```{r block4_3, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+interact_plot(model = full_trust, pred = fWHR, modx = Race,
+              x.label ="Facial Width-to-Height Ratio (fWHR)" , y.label = "Trustworthiness dimension" )+theme_apa() 
+
+```
+
+<div style="margin-bottom:100px;">
+
+<div style="margin-bottom:100px;">
+#### Pairwise slopes comparisons
+
+```{r block4_5, include=T, echo=FALSE, message=FALSE, results = "asis"}
+
+library(emmeans)
+# Obtain slopes for each machine ...
+slopecomp2 <- emmeans(full_trust, "Race", var = "fWHR") 
+# ... and pairwise comparisons thereof
+slopecomp2tab=pairs(slopecomp2)
+slopecomp2tab=as.data.frame(slopecomp2tab)
+
+
+kable(slopecomp2tab, digits = 2)%>% kable_styling(bootstrap_options = "striped", full_width = F)
+
+```
+
+
+
+## Pathogen prevalence
+
+
+### DV: Perceived Dominance 
+
+#### Mixed effects regression results
+
+```{r block5_1, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+
+#############################
+##### Country level pathogen score
+############################
+
+################
+## Country level pathogen score was constructed based on the Murray, D. R., & Schaller, M. (2010). Historical prevalence of infectious diseases within 230 geopolitical regions: A tool for investigating origins of culture. Journal of Cross-Cultural Psychology, 41, 99-108
+
+## Authors proposed two scores: 9-items scores, and 7- items scores. In the current analysis we employ 7-times score becausee of better cross country coverage.
+################
+
+### Import pathogen score datafile
+pscore = rio::import("../data/CountryPathogenScore.csv")
+
+######### join the data
+
+## Mege them together
+pdta= merge(x = Merge, y = pscore, by.x = "country",by.y = "PSAcode", all.x = TRUE)
+
+
+
+
+#========================================================================================
+# Estimate direct effect of pathogen prevelence
+#========================================================================================
+df_cl <-pdta[!is.na(pdta["Pscore"]),]  #version of the data excluding missing pscore
+                                      # only needed for this subset of analysis
+
+
+ref_wo_path1<-lmer(Dom.dim ~ fWHR*Gender+ fWHR*Race+ fWHR*Age + (1|country),
+               data = df_cl,control= control_params,REML = FALSE) #estimate the direct influence of pathogen prev.
+ref_wo_path2<-lmer(trust.dim ~ fWHR*Gender+ fWHR*Race+ fWHR*Age + (1|country),
+               data = df_cl,control= control_params,REML = FALSE) ##estimate the direct influence of pathogen prev.
+
+##introduce the fixed effect term
+
+
+ful_pathoDom_direc<-lmer(Dom.dim ~ fWHR*Gender+ fWHR*Race+ fWHR*Age + Pscore+ (1|country),
+               data = df_cl,control= control_params,REML = FALSE) #estimate the direct influence of pathogen prev.
+ful_pathotrst_direc<-lmer(trust.dim ~ fWHR*Gender+ fWHR*Race+ fWHR*Age + Pscore+ (1|country),
+               data = df_cl,control= control_params,REML = FALSE) ##estimate the direct influence of pathogen prev.
+
+
+
+#========================================================================================
+# Full interaction models with pathogen prev.
+#========================================================================================
+## full models
+ful_patho_dom <- lmer(Dom.dim ~ fWHR*Gender+ fWHR*Race+ fWHR*Age + fWHR*Pscore+ (1|country),
+               data = pdta,control= control_params,REML = FALSE)
+
+ful_patho_trust <- lmer(trust.dim ~ fWHR*Gender+ fWHR*Race+ fWHR*Age + fWHR*Pscore+ (1|country),
+               data = pdta,control= control_params,REML = FALSE)
+
+
+
+
+
+## model without dominance
+patho_dom <- lmer(Dom.dim ~ fWHR*Gender+ fWHR*Race+ fWHR*Age + Pscore+ (1|country),
+               data = pdta,control= control_params,REML = FALSE)
+
+
+# print the above two model results and interaction plot
+tab_model(patho_dom,ful_patho_dom)
+
+
+
+```
+
+<br/>
+<br/>
+#### ANOVA comparing models
+```{r block5_1v2, include=T, echo=FALSE, message=FALSE, results = "asis" }
+#look at significance of interaction effect
+anova_mod =anova(patho_dom,ful_patho_dom)
+options(knitr.kable.NA = '')  #replace NA with blanks
+rownames(anova_mod) <- c()
+kable(anova_mod, digits = 2)%>% kable_styling(bootstrap_options = "striped", full_width = F)
+
+```
+
+
+<br/>
+<br/>
+
+
+<div style="margin-bottom:100px;">
+### Direct effect of country level pathogen prevalence on perceived dominance
+#### ANOVA comparing models
+```{r block5_2, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+anova_mod =anova(ref_wo_path1,ful_pathoDom_direc)
+options(knitr.kable.NA = '')  #replace NA with blanks
+rownames(anova_mod) <- c()
+kable(anova_mod, digits = 2)%>% kable_styling(bootstrap_options = "striped", full_width = F)
+
+
+```
+
+### Direct effect of country level pathogen prevalence on perceived trustworthiness
+#### ANOVA comparing models
+```{r block5_3, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+anova_mod =anova(ref_wo_path2,ful_pathotrst_direc)
+options(knitr.kable.NA = '')  #replace NA with blanks
+rownames(anova_mod) <- c()
+kable(anova_mod, digits = 2)%>% kable_styling(bootstrap_options = "striped", full_width = F)
+
+
+```
+
+
+
+<div style="margin-bottom:100px;">
+#### Plotting fixed effects estimates for the interaction model
+```{r block5_4, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+#PLOT Coefficients
+plot_PP_dom =plot_coefs(ful_patho_dom, scale = TRUE, colors = "Black",
+                coefs = c("Facial Width-to-Height Ratio(fWHR)"="fWHR",
+                          "Age"="Age",
+                          "Race -Black" = "RaceB",
+                          "Race -White" = "RaceW",
+                          "Race -Latino" = "RaceL",
+                          "Race -Asian" = "RaceA",
+                          "Gender" = "GenderM",
+                          "fWHR x Age" = "fWHR:Age",
+                          "fWHR x Asian Race" = "fWHR:RaceA",
+                          "fWHR x Black Race" = "fWHR:RaceB",
+                          "fWHR x Hispanic Race" = "fWHR:RaceL",
+                          "fWHR x Gender"="fWHR:GenderM",
+                          "Pathogen prevalence" = "Pscore",
+                          "fWHR x Pathogen prevalencer"="fWHR:Pscore"))
+
+plot_PP_dom + theme(panel.background = element_rect(colour = "black", size=.8))
+
+
+```
+
+<div style="margin-bottom:100px;">
+#### Interaction plot
+```{r block5_5, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+interact_plot(model = ful_patho_dom, pred = fWHR, modx = Pscore,
+              x.label ="Facial Width-to-Height Ratio (fWHR)" , y.label = "Dominance dimension")+theme_apa() 
+
+```
+
+<div style="margin-bottom:100px;">
+<br/>
+<br/>
+
+### DV: Perceived Trustworthiness 
+
+
+#### Mixed effects regression results (Interaction effect)
+
+```{r block6_1, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+patho_trust <- lmer(trust.dim ~ fWHR*Gender+ fWHR*Race+ fWHR*Age + Pscore+ (1|country),
+               data = pdta,control= control_params,REML = FALSE)
+
+
+# print the above two model results and interaction plot
+tab_model(patho_trust,ful_patho_trust)
+
+
+```
+
+<div style="margin-bottom:100px;">
+<br/>
+<br/>
+#### ANOVA comparing models
+```{r block6_1v2, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+#look at significance of interaction
+anova_mod =anova(patho_trust,ful_patho_trust)
+options(knitr.kable.NA = '')  #replace NA with blanks
+rownames(anova_mod) <- c()
+kable(anova_mod, digits = 2)%>% kable_styling(bootstrap_options = "striped", full_width = F)
+
+
+```
+
+<div style="margin-bottom:100px;">
+#### Plotting fixed effects estimates for the interaction model
+```{r block6_2, include=T, echo=FALSE, message=FALSE, results = "asis" }
+#PLOT Coefficients
+plot_summs(ful_patho_trust)
+
+
+
+#PLOT Coefficients
+plot_PP_trust =plot_coefs(ful_patho_trust, scale = TRUE, colors = "Black",
+                coefs = c("Facial Width-to-Height Ratio(fWHR)"="fWHR",
+                          "Age"="Age",
+                          "Race -Black" = "RaceB",
+                          "Race -White" = "RaceW",
+                          "Race -Latino" = "RaceL",
+                          "Race -Asian" = "RaceA",
+                          "Gender" = "GenderM",
+                          "fWHR x Age" = "fWHR:Age",
+                          "fWHR x Asian Race" = "fWHR:RaceA",
+                          "fWHR x Black Race" = "fWHR:RaceB",
+                          "fWHR x Hispanic Race" = "fWHR:RaceL",
+                          "fWHR x Gender"="fWHR:GenderM",
+                          "Pathogen prevalence" = "Pscore",
+                          "fWHR x Pathogen prevalencer"="fWHR:Pscore"))
+
+plot_PP_trust + theme(panel.background = element_rect(colour = "black", size=.8))
+
+
+
+```
+
+<div style="margin-bottom:100px;">
+<br/>
+<br/>
+#### Interaction plot
+```{r block6_3, include=T, echo=FALSE, message=FALSE, results = "asis" }
+
+interact_plot(model =ful_patho_trust, pred = fWHR, modx = Pscore,
+              x.label ="Facial Width-to-Height Ratio (fWHR)" , y.label = "Trustworthiness dimension", main.title= "Interaction plot: fWHR x Pathogen score") +theme_apa()
+
+
+
+```
+
+
